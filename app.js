@@ -2,16 +2,24 @@ class SolanaMonitor {
     constructor() {
         this.coinId = 'solana';
         this.apiBaseUrl = 'https://api.coingecko.com/api/v3';
-        this.priceHistory = [];
-        this.maxHistoryPoints = 100;
+        this.priceHistory = {};
+        this.currentTimeframe = '15m';
         this.updateInterval = 30000; // 30 segundos
         this.chart = null;
+        this.timeframeConfig = {
+            '15m': { days: 1, interval: '5min', label: '15 Minutos', timeUnit: 'minute' },
+            '4h': { days: 1, interval: '30min', label: '4 Horas', timeUnit: 'hour' },
+            '24h': { days: 1, interval: 'hourly', label: '24 Horas', timeUnit: 'hour' },
+            '7d': { days: 7, interval: 'daily', label: '7 Dias', timeUnit: 'day' },
+            '30d': { days: 30, interval: 'daily', label: '30 Dias', timeUnit: 'day' }
+        };
         this.init();
     }
 
     async init() {
         await this.fetchInitialData();
         this.setupChart();
+        this.setupTimeframeButtons();
         this.startAutoUpdate();
         this.setupEventListeners();
     }
@@ -19,7 +27,7 @@ class SolanaMonitor {
     async fetchInitialData() {
         try {
             await this.fetchPriceData();
-            await this.fetchHistoricalData();
+            await this.fetchAllTimeframes();
         } catch (error) {
             console.error('Erro ao buscar dados iniciais:', error);
             this.updateStatus('Erro ao conectar API', 'error');
@@ -44,11 +52,21 @@ class SolanaMonitor {
         }
     }
 
-    async fetchHistoricalData() {
+    async fetchAllTimeframes() {
+        for (const timeframe of Object.keys(this.timeframeConfig)) {
+            try {
+                await this.fetchHistoricalData(timeframe);
+            } catch (error) {
+                console.error(`Erro ao buscar dados para ${timeframe}:`, error);
+            }
+        }
+    }
+
+    async fetchHistoricalData(timeframe) {
         try {
-            const days = 1;
+            const config = this.timeframeConfig[timeframe];
             const response = await fetch(
-                `${this.apiBaseUrl}/coins/${this.coinId}/market_chart?vs_currency=usd&days=${days}&interval=hourly`
+                `${this.apiBaseUrl}/coins/${this.coinId}/market_chart?vs_currency=usd&days=${config.days}&interval=${config.interval}`
             );
 
             if (!response.ok) {
@@ -56,14 +74,20 @@ class SolanaMonitor {
             }
 
             const data = await response.json();
-            this.priceHistory = data.prices.map(point => ({
+            this.priceHistory[timeframe] = data.prices.map(point => ({
                 timestamp: point[0],
                 price: point[1]
             }));
 
-            this.updateChart();
+            // Se for o timeframe atual, atualiza o gráfico
+            if (timeframe === this.currentTimeframe) {
+                this.updateChart();
+            }
+
+            return this.priceHistory[timeframe];
         } catch (error) {
-            console.error('Erro ao buscar dados históricos:', error);
+            console.error(`Erro ao buscar dados históricos para ${timeframe}:`, error);
+            throw error;
         }
     }
 
@@ -89,6 +113,9 @@ class SolanaMonitor {
         document.getElementById('volume24h').textContent = `$${this.formatLargeNumber(volume24h)}`;
         document.getElementById('marketCap').textContent = `$${this.formatLargeNumber(marketCap)}`;
 
+        // Atualizar volume stat
+        document.getElementById('volumeStat').textContent = `$${this.formatLargeNumber(volume24h)}`;
+
         // Atualizar ícone
         if (data.image && data.image.large) {
             document.getElementById('crypto-icon').src = data.image.large;
@@ -98,36 +125,30 @@ class SolanaMonitor {
         const now = new Date();
         document.getElementById('lastUpdate').textContent = now.toLocaleString('pt-BR');
 
-        // Adicionar ao histórico
-        this.addToHistory(price);
-    }
-
-    addToHistory(price) {
-        const timestamp = Date.now();
-        this.priceHistory.push({ timestamp, price });
-
-        if (this.priceHistory.length > this.maxHistoryPoints) {
-            this.priceHistory.shift();
-        }
-
-        this.updateChart();
+        // Atualizar estatísticas do gráfico atual
+        this.updateChartStats();
     }
 
     setupChart() {
         const ctx = document.getElementById('priceChart').getContext('2d');
         this.chart = new Chart(ctx, {
             type: 'line',
-            data: {
+             {
                 labels: [],
                 datasets: [{
                     label: 'SOL/USDT Price',
-                    data: [],
+                     [],
                     borderColor: '#667eea',
                     backgroundColor: 'rgba(102, 126, 234, 0.1)',
                     borderWidth: 3,
                     pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#667eea',
+                    pointHoverBorderColor: 'white',
+                    pointHoverBorderWidth: 2,
                     fill: true,
-                    tension: 0.4
+                    tension: 0.4,
+                    stepped: false
                 }]
             },
             options: {
@@ -140,9 +161,19 @@ class SolanaMonitor {
                     tooltip: {
                         mode: 'index',
                         intersect: false,
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        titleColor: '#333',
+                        bodyColor: '#666',
+                        borderColor: '#e0e0e0',
+                        borderWidth: 1,
+                        padding: 12,
                         callbacks: {
                             label: function(context) {
-                                return `$${context.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                                return `$${context.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+                            },
+                            title: function(tooltipItems) {
+                                const date = new Date(tooltipItems[0].parsed.x);
+                                return date.toLocaleString('pt-BR');
                             }
                         }
                     }
@@ -152,13 +183,22 @@ class SolanaMonitor {
                         type: 'time',
                         time: {
                             unit: 'minute',
-                            tooltipFormat: 'HH:mm:ss'
+                            tooltipFormat: 'dd/MM HH:mm:ss',
+                            displayFormats: {
+                                minute: 'HH:mm',
+                                hour: 'dd/MM HH:mm',
+                                day: 'dd/MM'
+                            }
                         },
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)'
                         },
                         ticks: {
-                            maxTicksLimit: 10
+                            maxTicksLimit: 10,
+                            color: '#666'
+                        },
+                        border: {
+                            color: '#e0e0e0'
                         }
                     },
                     y: {
@@ -167,9 +207,13 @@ class SolanaMonitor {
                             color: 'rgba(0, 0, 0, 0.05)'
                         },
                         ticks: {
+                            color: '#666',
                             callback: function(value) {
                                 return '$' + value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                             }
+                        },
+                        border: {
+                            color: '#e0e0e0'
                         }
                     }
                 },
@@ -178,21 +222,83 @@ class SolanaMonitor {
                     mode: 'nearest'
                 },
                 animation: {
-                    duration: 0
+                    duration: 1000,
+                    easing: 'easeOutQuart'
                 }
             }
         });
     }
 
+    setupTimeframeButtons() {
+        const buttons = document.querySelectorAll('.timeframe-btn');
+        buttons.forEach(button => {
+            button.addEventListener('click', async (e) => {
+                // Remover classe active de todos
+                buttons.forEach(btn => btn.classList.remove('active'));
+                
+                // Adicionar classe active ao botão clicado
+                e.target.classList.add('active');
+                
+                // Obter timeframe selecionado
+                this.currentTimeframe = e.target.dataset.timeframe;
+                
+                // Atualizar título do gráfico
+                document.getElementById('chartTitle').textContent = `Gráfico - Últimos ${this.timeframeConfig[this.currentTimeframe].label}`;
+                
+                // Buscar dados se necessário
+                if (!this.priceHistory[this.currentTimeframe] || this.priceHistory[this.currentTimeframe].length === 0) {
+                    await this.fetchHistoricalData(this.currentTimeframe);
+                } else {
+                    this.updateChart();
+                }
+                
+                // Atualizar estatísticas
+                this.updateChartStats();
+            });
+        });
+    }
+
     updateChart() {
-        if (!this.chart) return;
+        if (!this.chart || !this.priceHistory[this.currentTimeframe]) return;
 
-        const labels = this.priceHistory.map(point => new Date(point.timestamp));
-        const data = this.priceHistory.map(point => point.price);
+        const config = this.timeframeConfig[this.currentTimeframe];
+        const data = this.priceHistory[this.currentTimeframe];
 
+        if (data.length === 0) return;
+
+        const labels = data.map(point => new Date(point.timestamp));
+        const prices = data.map(point => point.price);
+
+        // Atualizar dados do gráfico
         this.chart.data.labels = labels;
-        this.chart.data.datasets[0].data = data;
-        this.chart.update();
+        this.chart.data.datasets[0].data = prices;
+
+        // Atualizar configuração do eixo X
+        this.chart.options.scales.x.time.unit = config.timeUnit;
+
+        // Atualizar gráfico
+        this.chart.update('none');
+    }
+
+    updateChartStats() {
+        if (!this.priceHistory[this.currentTimeframe]) return;
+
+        const data = this.priceHistory[this.currentTimeframe];
+        if (data.length === 0) return;
+
+        const prices = data.map(point => point.price);
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        const firstPrice = prices[0];
+        const lastPrice = prices[prices.length - 1];
+        const change = ((lastPrice - firstPrice) / firstPrice) * 100;
+
+        document.getElementById('chartMin').textContent = `Min: $${minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        document.getElementById('chartMax').textContent = `Max: $${maxPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        const changeElement = document.getElementById('chartChange');
+        changeElement.textContent = `Variação: ${change.toFixed(2)}%`;
+        changeElement.className = `chartChange ${change >= 0 ? 'positive' : 'negative'}`;
     }
 
     formatLargeNumber(num) {
@@ -207,7 +313,6 @@ class SolanaMonitor {
         const statusElement = document.getElementById('apiStatus');
         statusElement.textContent = message;
         
-        statusElement.className = '';
         if (type === 'success') {
             statusElement.style.color = '#00cc00';
         } else if (type === 'error') {
@@ -219,6 +324,11 @@ class SolanaMonitor {
         setInterval(async () => {
             try {
                 await this.fetchPriceData();
+                
+                // Atualizar dados do timeframe atual a cada 5 minutos
+                if (Math.random() < 0.2) { // 20% de chance a cada 30s = ~5min
+                    await this.fetchHistoricalData(this.currentTimeframe);
+                }
             } catch (error) {
                 console.error('Erro na atualização automática:', error);
             }
@@ -226,7 +336,7 @@ class SolanaMonitor {
     }
 
     setupEventListeners() {
-        // Adicionar botão de atualização manual
+        // Botão de atualização manual
         const refreshBtn = document.createElement('button');
         refreshBtn.textContent = '🔄 Atualizar Agora';
         refreshBtn.style.cssText = `
@@ -242,6 +352,7 @@ class SolanaMonitor {
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
             transition: all 0.3s;
+            z-index: 1000;
         `;
         refreshBtn.onmouseover = () => {
             refreshBtn.style.transform = 'scale(1.05)';
@@ -253,13 +364,22 @@ class SolanaMonitor {
         refreshBtn.onclick = async () => {
             try {
                 await this.fetchPriceData();
-                alert('Dados atualizados com sucesso!');
+                await this.fetchHistoricalData(this.currentTimeframe);
+                alert('✅ Dados atualizados com sucesso!');
             } catch (error) {
-                alert('Erro ao atualizar dados: ' + error.message);
+                alert('❌ Erro ao atualizar dados: ' + error.message);
             }
         };
 
         document.body.appendChild(refreshBtn);
+
+        // Atualizar dados ao voltar para a aba
+        document.addEventListener('visibilitychange', async () => {
+            if (!document.hidden) {
+                await this.fetchPriceData();
+                await this.fetchHistoricalData(this.currentTimeframe);
+            }
+        });
     }
 }
 
