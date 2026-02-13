@@ -17,11 +17,88 @@ class SolanaMonitor {
     }
 
     async init() {
-        await this.fetchInitialData();
-        this.setupChart();
-        this.setupTimeframeButtons();
-        this.startAutoUpdate();
-        this.setupEventListeners();
+        try {
+            // Inicializar UI com estado de carregamento
+            this.updateLoadingState(true);
+            
+            // Buscar dados iniciais
+            await this.fetchInitialData();
+            
+            // Configurar gráfico
+            this.setupChart();
+            
+            // Configurar timeframes
+            this.setupTimeframeButtons();
+            
+            // Iniciar atualizações
+            this.startAutoUpdate();
+            
+            // Configurar eventos
+            this.setupEventListeners();
+            
+            // Finalizar carregamento
+            this.updateLoadingState(false);
+        } catch (error) {
+            console.error('Erro durante inicialização:', error);
+            this.updateErrorState(error.message);
+        }
+    }
+
+    updateLoadingState(isLoading) {
+        const loadingElement = document.getElementById('loadingState');
+        if (isLoading) {
+            document.getElementById('currentPrice').textContent = 'Carregando...';
+            document.getElementById('priceChange').textContent = '0.00%';
+            document.getElementById('high24h').textContent = '-';
+            document.getElementById('low24h').textContent = '-';
+            document.getElementById('volume24h').textContent = '-';
+            document.getElementById('marketCap').textContent = '-';
+            document.getElementById('volumeStat').textContent = '-';
+            
+            // Adicionar estado de carregamento
+            if (!loadingElement) {
+                const loadingDiv = document.createElement('div');
+                loadingDiv.id = 'loadingState';
+                loadingDiv.innerHTML = `
+                    <div class="loading-spinner">
+                        <div class="spinner"></div>
+                        <p>Conectando à CoinGecko API...</p>
+                    </div>
+                `;
+                document.querySelector('.price-card').insertBefore(
+                    loadingDiv,
+                    document.querySelector('.timeframe-selector')
+                );
+            }
+        } else {
+            if (loadingElement) {
+                loadingElement.remove();
+            }
+        }
+    }
+
+    updateErrorState(message) {
+        this.updateLoadingState(false);
+        document.getElementById('currentPrice').textContent = 'Erro';
+        document.getElementById('priceChange').textContent = '!';
+        document.getElementById('apiStatus').textContent = `Erro: ${message}`;
+        document.getElementById('apiStatus').style.color = '#cc0000';
+        
+        // Mostrar mensagem de erro na UI
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        errorDiv.innerHTML = `
+            <p>⚠️ Erro ao carregar dados. Tente novamente em 30 segundos.</p>
+            <p>${message}</p>
+        `;
+        document.querySelector('.price-card').appendChild(errorDiv);
+        
+        // Remover após 10 segundos
+        setTimeout(() => {
+            if (errorDiv.parentNode) {
+                errorDiv.parentNode.removeChild(errorDiv);
+            }
+        }, 10000);
     }
 
     async fetchInitialData() {
@@ -31,6 +108,7 @@ class SolanaMonitor {
         } catch (error) {
             console.error('Erro ao buscar dados iniciais:', error);
             this.updateStatus('Erro ao conectar API', 'error');
+            throw error;
         }
     }
 
@@ -58,6 +136,7 @@ class SolanaMonitor {
                 await this.fetchHistoricalData(timeframe);
             } catch (error) {
                 console.error(`Erro ao buscar dados para ${timeframe}:`, error);
+                // Não interromper o processo para outros timeframes
             }
         }
     }
@@ -133,11 +212,11 @@ class SolanaMonitor {
         const ctx = document.getElementById('priceChart').getContext('2d');
         this.chart = new Chart(ctx, {
             type: 'line',
-             {
+            data: {  // CORREÇÃO CRÍTICA AQUI - faltava o "data: {" no início
                 labels: [],
                 datasets: [{
                     label: 'SOL/USDT Price',
-                     [],
+                    data: [],  // CORREÇÃO CRÍTICA AQUI - faltava "data: []"
                     borderColor: '#667eea',
                     backgroundColor: 'rgba(102, 126, 234, 0.1)',
                     borderWidth: 3,
@@ -247,7 +326,14 @@ class SolanaMonitor {
                 
                 // Buscar dados se necessário
                 if (!this.priceHistory[this.currentTimeframe] || this.priceHistory[this.currentTimeframe].length === 0) {
-                    await this.fetchHistoricalData(this.currentTimeframe);
+                    try {
+                        this.updateLoadingState(true);
+                        await this.fetchHistoricalData(this.currentTimeframe);
+                        this.updateLoadingState(false);
+                    } catch (error) {
+                        this.updateLoadingState(false);
+                        this.updateErrorState('Falha ao carregar dados do timeframe');
+                    }
                 } else {
                     this.updateChart();
                 }
@@ -327,10 +413,15 @@ class SolanaMonitor {
                 
                 // Atualizar dados do timeframe atual a cada 5 minutos
                 if (Math.random() < 0.2) { // 20% de chance a cada 30s = ~5min
-                    await this.fetchHistoricalData(this.currentTimeframe);
+                    try {
+                        await this.fetchHistoricalData(this.currentTimeframe);
+                    } catch (error) {
+                        console.error('Erro ao atualizar timeframe:', error);
+                    }
                 }
             } catch (error) {
                 console.error('Erro na atualização automática:', error);
+                this.updateStatus('Erro na atualização', 'error');
             }
         }, this.updateInterval);
     }
@@ -363,10 +454,13 @@ class SolanaMonitor {
         };
         refreshBtn.onclick = async () => {
             try {
+                this.updateLoadingState(true);
                 await this.fetchPriceData();
                 await this.fetchHistoricalData(this.currentTimeframe);
+                this.updateLoadingState(false);
                 alert('✅ Dados atualizados com sucesso!');
             } catch (error) {
+                this.updateLoadingState(false);
                 alert('❌ Erro ao atualizar dados: ' + error.message);
             }
         };
@@ -376,8 +470,15 @@ class SolanaMonitor {
         // Atualizar dados ao voltar para a aba
         document.addEventListener('visibilitychange', async () => {
             if (!document.hidden) {
-                await this.fetchPriceData();
-                await this.fetchHistoricalData(this.currentTimeframe);
+                try {
+                    this.updateLoadingState(true);
+                    await this.fetchPriceData();
+                    await this.fetchHistoricalData(this.currentTimeframe);
+                    this.updateLoadingState(false);
+                } catch (error) {
+                    this.updateLoadingState(false);
+                    console.error('Erro ao atualizar ao voltar para aba:', error);
+                }
             }
         });
     }
@@ -385,5 +486,20 @@ class SolanaMonitor {
 
 // Inicializar aplicativo quando a página carregar
 document.addEventListener('DOMContentLoaded', () => {
+    // Adicionar mensagem de carregamento inicial
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'loadingState';
+    loadingDiv.innerHTML = `
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>Conectando à CoinGecko API...</p>
+        </div>
+    `;
+    document.querySelector('.price-card').insertBefore(
+        loadingDiv,
+        document.querySelector('.timeframe-selector')
+    );
+    
+    // Iniciar aplicativo
     new SolanaMonitor();
 });
