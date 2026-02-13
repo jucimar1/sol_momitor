@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOL/USDT Monitor - CoinGecko</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Monitor SOL/USDT</h1>
+            <p>Preços em tempo real via CoinGecko API</p>
+        </header>
+
+        <div class="price-card">
+            <div class="crypto-info">
+                <img id="crypto-icon" src="" alt="SOL Icon">
+                <div>
+                    <h2>Solana (SOL)</h2>
+                    <p class="symbol">SOL/USDT</p>
+                </div>
+            </div>
+
+            <div class="price-display">
+                <span class="current-price" id="currentPrice">Carregando...</span>
+                <span class="price-change" id="priceChange">0.00%</span>
+            </div>
+
+            <div class="price-details">
+                <div class="detail-item">
+                    <span class="label">24h High:</span>
+                    <span id="high24h">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="label">24h Low:</span>
+                    <span id="low24h">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="label">Volume 24h:</span>
+                    <span id="volume24h">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="label">Market Cap:</span>
+                    <span id="marketCap">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-box">
+                <h3>Última Atualização</h3>
+                <p id="lastUpdate">-</p>
+            </div>
+            <div class="stat-box">
+                <h3>Status API</h3>
+                <p id="apiStatus">Conectando...</p>
+            </div>
+        </div>
+
+        <footer>
+            <p>Dados fornecidos por CoinGecko API | Atualização automática a cada 30 segundos</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
