@@ -102,6 +102,36 @@ header p {
     color: #cc0000;
 }
 
+.timeframe-selector {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.timeframe-btn {
+    padding: 10px 20px;
+    background: #f0f0f0;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+    min-width: 80px;
+}
+
+.timeframe-btn:hover {
+    background: #e0e0e0;
+    transform: translateY(-2px);
+}
+
+.timeframe-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
 .price-details {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -135,7 +165,47 @@ header p {
     padding: 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
     margin-bottom: 30px;
-    height: 400px;
+    height: 500px;
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.chart-header h3 {
+    color: #333;
+    font-size: 1.3em;
+}
+
+.chart-stats {
+    display: flex;
+    gap: 20px;
+}
+
+.chart-stats span {
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+#chartMin {
+    color: #cc0000;
+}
+
+#chartMax {
+    color: #00cc00;
+}
+
+#chartChange.positive {
+    color: #00cc00;
+}
+
+#chartChange.negative {
+    color: #cc0000;
 }
 
 .stats-container {
@@ -156,6 +226,7 @@ header p {
 .stat-box h3 {
     color: #667eea;
     margin-bottom: 10px;
+    font-size: 1.1em;
 }
 
 .stat-box p {
@@ -183,6 +254,27 @@ footer {
     }
 
     .chart-container {
-        height: 300px;
+        height: 400px;
+    }
+
+    .timeframe-selector {
+        flex-direction: row;
+        justify-content: center;
+    }
+
+    .timeframe-btn {
+        padding: 8px 16px;
+        font-size: 0.9em;
+    }
+
+    .chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .chart-stats {
+        flex-wrap: wrap;
+        gap: 10px;
     }
 }
